@@ -5,6 +5,8 @@ import skimage.io
 import numpy as np
 from collections import defaultdict
 
+MAX_RETRY = 3
+
 def main( args ):
     
     logger = get_logger(args.log_dir)
@@ -34,21 +36,33 @@ def main( args ):
             logger.info("[null] @ line# {0}" .format(counter["total"]))
             continue
         
-        """        
-        Only save large image. So missing image is around 10,000
-        """
-        im = skimage.io.imread(url_m)
+        for i in range(MAX_RETRY):
+            try:
+                im = skimage.io.imread(url_m)
+            except:
+                continue
+            break
+            
         if np.array_equal(junk, im): 
+            counter["na"] += 1
             logger.info("[NA] @ line# {0}" .format(counter["total"]))
             continue
-        im_dir, im_name = name.split("Flickr\\")[1].split("\\")
         
+        im_dir, im_name = name.split("Flickr\\")[1].split("\\")
         if not os.path.exists(os.path.join(args.save_dir, im_dir)):
             os.makedirs(os.path.join(args.save_dir, im_dir))
+        
         im_loc = os.path.join(im_dir, im_name)
         save_path = os.path.join(args.save_dir, im_loc)
         skimage.io.imsave(save_path, im)
     
+    logger.info("===========================================================")
+    logger.info("Download image complete!")
+    logger.info("[total]: {0}, [weird]: {1}" 
+        .format(counter["total"], counter["weird"])) 
+    logger.info("[no_url]: {0}, [NA]: {1}"
+        .format(counter["no_url"], counter["na"]))
+    logger.info("===========================================================")
     fp.close()
 
 
