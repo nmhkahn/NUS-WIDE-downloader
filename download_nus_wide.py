@@ -18,14 +18,17 @@ def main( args ):
     fp.readline() # header
     
     junks = list()
+    junks.append(skimage.io.imread("https://s.yimg.com/pw/images/en-us/photo_unavailable.png"))
     junks.append(skimage.io.imread("./junk.gif"))
-    junks.append(skimage.io.imread("./junk2.jpg"))
 
     lines = list()
+    line_counter = 2
     while True:
         line = fp.readline()
         if not line: break
-        lines.append(line)
+        ctx = [line_counter, line]
+        lines.append(ctx)
+        line_counter += 1
     fp.close()
 
     threads  = [None] * args.num_threads
@@ -67,7 +70,8 @@ def download( urls,
               counter,
               logger ):
     
-    for line in urls:
+    for ctx in urls:
+        line_num, line = ctx[0], ctx[1]
         counter["total"] += 1
         
         try:
@@ -75,13 +79,13 @@ def download( urls,
         except:
             # format of line is wierd
             counter["weird"] += 1
-            logger.info("[weird] img-id: {0}" .format(id))
+            logger.info("[weird] line #{0}" .format(line_num))
             continue
     
         if url_m == "null":
             # there is no image url
             counter["no_url"] += 1
-            logger.info("[no-url] img-id: {0}" .format(id))
+            logger.info("[no-url] line #{0}" .format(line_num))
             continue
         
         for i in range(MAX_RETRY):
@@ -99,9 +103,9 @@ def download( urls,
                 break
         if is_na:
             counter["na"] += 1
-            logger.info("[NA] line img-id: {0}" .format(id))
+            logger.info("[NA] line #{0}" .format(line_num))
             continue
-        
+
         im_dir, im_name = name.split("Flickr\\")[1].split("\\")
         if not os.path.exists(os.path.join(args.save_dir, im_dir)):
             os.makedirs(os.path.join(args.save_dir, im_dir))

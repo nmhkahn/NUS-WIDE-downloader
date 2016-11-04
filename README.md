@@ -19,7 +19,3 @@ There are some options you can give, see more info with,
 ```
 python3 download_nus_wide.py --help
 ```
-
-## TODO
-
-- support multiprocess
