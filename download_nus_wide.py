@@ -1,8 +1,10 @@
 import os
+import time
 import argparse
 import logging
 import skimage.io
 import numpy as np
+from threading import Thread
 from collections import defaultdict
 
 MAX_RETRY = 3
@@ -10,16 +12,62 @@ MAX_RETRY = 3
 def main( args ):
     
     logger = get_logger(args.log_dir)
-    counter = defaultdict(lambda: 0)
     
     path = os.path.join(args.url_dir, "NUS-WIDE-urls.txt")
     fp = open(path, "r")
     fp.readline() # header
     
-    junk = skimage.io.imread(args.junk_file)
+    junks = list()
+    junks.append(skimage.io.imread("./junk.gif"))
+    junks.append(skimage.io.imread("./junk2.jpg"))
+
+    lines = list()
     while True:
         line = fp.readline()
         if not line: break
+        lines.append(line)
+    fp.close()
+
+    threads  = [None] * args.num_threads
+    counters = [defaultdict(lambda: 0)] * args.num_threads
+    part = int(len(lines) / args.num_threads)
+    
+    t1 = time.time()
+    for i in range(args.num_threads):
+        # divide works
+        start = part*i; end = part*(i+1)
+        if i == args.num_threads-1:
+            end = len(lines)
+
+        threads[i] = Thread(target=download, 
+            args=(lines[start:end], junks, counters[i], logger))
+        threads[i].start()
+
+    total = defaultdict(lambda: 0)
+
+    for i in range(args.num_threads):
+        threads[i].join()
+        total["total"] += counters[i]["total"]
+        total["weird"] += counters[i]["weird"]
+        total["no_url"] += counters[i]["no_url"]
+        total["na"] += counters[i]["na"]
+    t2 = time.time()   
+
+    logger.info("===========================================================")
+    logger.info("Download image complete! ({0:.1f}s)" .format(t2-t1))
+    logger.info("[total]: {0}, [weird]: {1}" 
+        .format(total["total"], total["weird"])) 
+    logger.info("[no_url]: {0}, [NA]: {1}"
+        .format(total["no_url"], total["na"]))
+    logger.info("===========================================================")
+
+
+def download( urls,
+              junks,
+              counter,
+              logger ):
+    
+    for line in urls:
         counter["total"] += 1
         
         try:
@@ -27,13 +75,13 @@ def main( args ):
         except:
             # format of line is wierd
             counter["weird"] += 1
-            logger.info("[weird] @ line# {0}" .format(counter["total"]))
+            logger.info("[weird] img-id: {0}" .format(id))
             continue
     
         if url_m == "null":
             # there is no image url
             counter["no_url"] += 1
-            logger.info("[null] @ line# {0}" .format(counter["total"]))
+            logger.info("[no-url] img-id: {0}" .format(id))
             continue
         
         for i in range(MAX_RETRY):
@@ -42,10 +90,16 @@ def main( args ):
             except:
                 continue
             break
-            
-        if np.array_equal(junk, im): 
+        
+        # check image is not available image or not
+        is_na = False
+        for junk in junks:
+            if np.array_equal(junk, im): 
+                is_na = True
+                break
+        if is_na:
             counter["na"] += 1
-            logger.info("[NA] @ line# {0}" .format(counter["total"]))
+            logger.info("[NA] line img-id: {0}" .format(id))
             continue
         
         im_dir, im_name = name.split("Flickr\\")[1].split("\\")
@@ -55,15 +109,6 @@ def main( args ):
         im_loc = os.path.join(im_dir, im_name)
         save_path = os.path.join(args.save_dir, im_loc)
         skimage.io.imsave(save_path, im)
-    
-    logger.info("===========================================================")
-    logger.info("Download image complete!")
-    logger.info("[total]: {0}, [weird]: {1}" 
-        .format(counter["total"], counter["weird"])) 
-    logger.info("[no_url]: {0}, [NA]: {1}"
-        .format(counter["no_url"], counter["na"]))
-    logger.info("===========================================================")
-    fp.close()
 
 
 def get_logger( log_dir ):
@@ -80,6 +125,10 @@ def get_logger( log_dir ):
 def parse_args():
     
     parser = argparse.ArgumentParser()
+    parser.add_argument("--num_threads",
+        type=int,
+        default=1,
+        help="Number of thread to run.")
     parser.add_argument("--url_dir",
         type=str,
         default="./",
@@ -95,11 +144,7 @@ def parse_args():
         default="./",
         help="Dir which log file is saved. \
               (default is ./)")
-    parser.add_argument("--junk_file",
-        type=str,
-        default="junk.jpg",
-        help="Junk image path to match wheter cralwed image is junk or not")
-
+    
     return parser.parse_args()
 
 
