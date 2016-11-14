@@ -19,3 +19,7 @@ There are some options you can give, see more info with,
 ```
 python3 download_nus_wide.py --help
 ```
+
+## Note
+
+NUS-WIDE dataset has 269,948 images but with this downloader it can get only 221,166 raw images.
